@@ -1,0 +1,513 @@
+-- ========================================================
+-- AEKHUBxICEHUB📜🎉 - Full System Script
+-- ========================================================
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local SoundService = game:GetService("SoundService")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Assets
+local SOUND_TOGGLE_ID = "rbxassetid://131737037329240"
+local SOUND_CLICK_ID  = "rbxassetid://79969285031307"
+
+local soundToggle = Instance.new("Sound")
+soundToggle.SoundId = SOUND_TOGGLE_ID
+soundToggle.Volume = 1
+soundToggle.Parent = SoundService
+
+local soundClick = Instance.new("Sound")
+soundClick.SoundId = SOUND_CLICK_ID
+soundClick.Volume = 1
+soundClick.Parent = SoundService
+
+local function playSound(snd)
+    snd:Play()
+end
+
+-- State Management
+local States = {
+    Speed = false,
+    SpeedValue = 16,
+    Fly = false,
+    InfiniteJump = false,
+    Noclip = false,
+    GodMode = false,
+    TimeStop = false
+}
+
+local FlySpeed = 50
+local FlyBodyVel, FlyBodyGyro
+local NoclipConnection
+local TimeStopLightingBackup = {}
+
+-- Clean Old ScreenGui
+if PlayerGui:FindFirstChild("AEKHUB_ScreenGui") then
+    PlayerGui:FindFirstChild("AEKHUB_ScreenGui"):Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AEKHUB_ScreenGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
+
+-- ========================================================
+-- 1. Loading Screen (GUIJARUNSCRIPT)
+-- ========================================================
+local LoadingFrame = Instance.new("Frame")
+LoadingFrame.Name = "LoadingFrame"
+LoadingFrame.Size = UDim2.new(1, 0, 1, 0)
+LoadingFrame.BackgroundColor3 = Color3.fromRGB(10, 15, 25)
+LoadingFrame.Parent = ScreenGui
+
+-- Hacker Background Effect (Text Rain)
+local HackerBg = Instance.new("Frame")
+HackerBg.Size = UDim2.new(1, 0, 1, 0)
+HackerBg.BackgroundTransparency = 1
+HackerBg.Parent = LoadingFrame
+
+task.spawn(function()
+    local chars = {"0", "1", "A", "E", "K", "H", "U", "B", "X", "I", "C", "E", "#", "$", "%", "&"}
+    while LoadingFrame.Parent do
+        local label = Instance.new("TextLabel")
+        label.Text = chars[math.random(1, #chars)]
+        label.TextColor3 = Color3.fromRGB(0, 170, 255)
+        label.TextTransparency = 0.6
+        label.TextSize = math.random(14, 24)
+        label.Font = Enum.Font.Code
+        label.Size = UDim2.new(0, 30, 0, 30)
+        label.Position = UDim2.new(math.random(), 0, -0.1, 0)
+        label.BackgroundTransparency = 1
+        label.Parent = HackerBg
+
+        local duration = math.random(2, 5)
+        label:TweenPosition(UDim2.new(label.Position.X.Scale, 0, 1.1, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Linear, duration, true, function()
+            label:Destroy()
+        end)
+        task.wait(0.1)
+    end
+end)
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Text = "GUIJARUNSCRIPT"
+TitleLabel.Size = UDim2.new(1, 0, 0, 100)
+TitleLabel.Position = UDim2.new(0, 0, 0.35, 0)
+TitleLabel.Font = Enum.Font.FredokaOne
+TitleLabel.TextSize = 56
+TitleLabel.TextColor3 = Color3.fromRGB(0, 195, 255)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Parent = LoadingFrame
+
+local UIStrokeText = Instance.new("UIStroke")
+UIStrokeText.Thickness = 3
+UIStrokeText.Color = Color3.fromRGB(192, 192, 192)
+UIStrokeText.Parent = TitleLabel
+
+local PercentLabel = Instance.new("TextLabel")
+PercentLabel.Text = "0%"
+PercentLabel.Size = UDim2.new(1, 0, 0, 50)
+PercentLabel.Position = UDim2.new(0, 0, 0.5, 0)
+PercentLabel.Font = Enum.Font.SourceSansBold
+PercentLabel.TextSize = 32
+PercentLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+PercentLabel.BackgroundTransparency = 1
+PercentLabel.Parent = LoadingFrame
+
+local ProgressBar = Instance.new("Frame")
+ProgressBar.Size = UDim2.new(0, 0, 0, 8)
+ProgressBar.Position = UDim2.new(0.3, 0, 0.58, 0)
+ProgressBar.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+ProgressBar.BorderSizePixel = 0
+ProgressBar.Parent = LoadingFrame
+
+local ProgressBarBG = Instance.new("Frame")
+ProgressBarBG.Size = UDim2.new(0.4, 0, 0, 8)
+ProgressBarBG.Position = UDim2.new(0.3, 0, 0.58, 0)
+ProgressBarBG.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+ProgressBarBG.BorderSizePixel = 0
+ProgressBarBG.ZIndex = 0
+ProgressBarBG.Parent = LoadingFrame
+
+-- Simulate Loading 1-100%
+task.spawn(function()
+    for i = 1, 100 do
+        PercentLabel.Text = i .. "%"
+        ProgressBar.Size = UDim2.new(0.4 * (i / 100), 0, 0, 8)
+        task.wait(0.02)
+    end
+    playSound(soundToggle)
+    LoadingFrame:Destroy()
+end)
+
+-- ========================================================
+-- 2. Main GUI Setup (AEKHUBxICEHUB)
+-- ========================================================
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 360, 0, 480)
+MainFrame.Position = UDim2.new(0.5, -180, 0.5, -240)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 25, 40)
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local MainUICorner = Instance.new("UICorner")
+MainUICorner.CornerRadius = UDim.new(0, 12)
+MainUICorner.Parent = MainFrame
+
+local MainUIStroke = Instance.new("UIStroke")
+MainUIStroke.Thickness = 2
+MainUIStroke.Color = Color3.fromRGB(192, 192, 192)
+MainUIStroke.Parent = MainFrame
+
+local Header = Instance.new("Frame")
+Header.Size = UDim2.new(1, 0, 0, 50)
+Header.BackgroundColor3 = Color3.fromRGB(25, 40, 65)
+Header.Parent = MainFrame
+
+local HeaderCorner = Instance.new("UICorner")
+HeaderCorner.CornerRadius = UDim.new(0, 12)
+HeaderCorner.Parent = Header
+
+local HeaderTitle = Instance.new("TextLabel")
+HeaderTitle.Text = "AEKHUBxICEHUB📜🎉"
+HeaderTitle.Size = UDim2.new(1, -50, 1, 0)
+HeaderTitle.Position = UDim2.new(0, 15, 0, 0)
+HeaderTitle.Font = Enum.Font.FredokaOne
+HeaderTitle.TextSize = 20
+HeaderTitle.TextColor3 = Color3.fromRGB(0, 200, 255)
+HeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
+HeaderTitle.BackgroundTransparency = 1
+HeaderTitle.Parent = Header
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Text = "X"
+CloseBtn.Size = UDim2.new(0, 35, 0, 35)
+CloseBtn.Position = UDim2.new(1, -42, 0.5, -17)
+CloseBtn.Font = Enum.Font.SourceSansBold
+CloseBtn.TextSize = 18
+CloseBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(35, 50, 75)
+CloseBtn.Parent = Header
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 8)
+CloseCorner.Parent = CloseBtn
+
+local ContentScroll = Instance.new("ScrollingFrame")
+ContentScroll.Size = UDim2.new(1, -20, 1, -70)
+ContentScroll.Position = UDim2.new(0, 10, 0, 60)
+ContentScroll.BackgroundTransparency = 1
+ContentScroll.CanvasSize = UDim2.new(0, 0, 0, 520)
+ContentScroll.ScrollBarThickness = 6
+ContentScroll.ScrollBarImageColor3 = Color3.fromRGB(192, 192, 192)
+ContentScroll.Parent = MainFrame
+
+local UIList = Instance.new("UIListLayout")
+UIList.SortOrder = Enum.SortOrder.LayoutOrder
+UIList.Padding = UDim.new(0, 10)
+UIList.Parent = ContentScroll
+
+-- Helper: Create Menu Buttons
+local function createToggleButton(text, layoutOrder, onClick)
+    local btn = Instance.new("TextButton")
+    btn.Text = text .. " : OFF"
+    btn.Size = UDim2.new(1, 0, 0, 42)
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize = 16
+    btn.TextColor3 = Color3.fromRGB(220, 220, 220)
+    btn.BackgroundColor3 = Color3.fromRGB(25, 45, 70)
+    btn.LayoutOrder = layoutOrder
+    btn.Parent = ContentScroll
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = btn
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1
+    stroke.Color = Color3.fromRGB(150, 150, 150)
+    stroke.Parent = btn
+
+    local state = false
+    btn.MouseButton1Click:Connect(function()
+        playSound(soundClick)
+        state = not state
+        if state then
+            btn.Text = text .. " : ON"
+            btn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        else
+            btn.Text = text .. " : OFF"
+            btn.BackgroundColor3 = Color3.fromRGB(25, 45, 70)
+            btn.TextColor3 = Color3.fromRGB(220, 220, 220)
+        end
+        onClick(state)
+    end)
+    return btn
+end
+
+-- ========================================================
+-- 3. Functions Implementation
+-- ========================================================
+
+-- Function 1: Speed + Slider (1-100)
+local SpeedFrame = Instance.new("Frame")
+SpeedFrame.Size = UDim2.new(1, 0, 0, 80)
+SpeedFrame.BackgroundColor3 = Color3.fromRGB(25, 45, 70)
+SpeedFrame.LayoutOrder = 1
+SpeedFrame.Parent = ContentScroll
+
+local SpeedCorner = Instance.new("UICorner")
+SpeedCorner.CornerRadius = UDim.new(0, 8)
+SpeedCorner.Parent = SpeedFrame
+
+local SpeedToggleBtn = Instance.new("TextButton")
+SpeedToggleBtn.Text = "วิ่งเร็ว (Speed) : OFF"
+SpeedToggleBtn.Size = UDim2.new(1, -20, 0, 35)
+SpeedToggleBtn.Position = UDim2.new(0, 10, 0, 5)
+SpeedToggleBtn.Font = Enum.Font.SourceSansBold
+SpeedToggleBtn.TextSize = 16
+SpeedToggleBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+SpeedToggleBtn.BackgroundTransparency = 1
+SpeedToggleBtn.Parent = SpeedFrame
+
+local SpeedSliderBG = Instance.new("Frame")
+SpeedSliderBG.Size = UDim2.new(1, -30, 0, 10)
+SpeedSliderBG.Position = UDim2.new(0, 15, 0, 52)
+SpeedSliderBG.BackgroundColor3 = Color3.fromRGB(15, 25, 40)
+SpeedSliderBG.Parent = SpeedFrame
+
+local SpeedSliderFill = Instance.new("Frame")
+SpeedSliderFill.Size = UDim2.new(0.16, 0, 1, 0)
+SpeedSliderFill.BackgroundColor3 = Color3.fromRGB(0, 195, 255)
+SpeedSliderFill.BorderSizePixel = 0
+SpeedSliderFill.Parent = SpeedSliderBG
+
+local SpeedValueLabel = Instance.new("TextLabel")
+SpeedValueLabel.Text = "ความเร็ว: 16"
+SpeedValueLabel.Size = UDim2.new(1, 0, 0, 15)
+SpeedValueLabel.Position = UDim2.new(0, 0, 0, 34)
+SpeedValueLabel.Font = Enum.Font.SourceSans
+SpeedValueLabel.TextSize = 13
+SpeedValueLabel.TextColor3 = Color3.fromRGB(192, 192, 192)
+SpeedValueLabel.BackgroundTransparency = 1
+SpeedValueLabel.Parent = SpeedFrame
+
+SpeedToggleBtn.MouseButton1Click:Connect(function()
+    playSound(soundClick)
+    States.Speed = not States.Speed
+    if States.Speed then
+        SpeedToggleBtn.Text = "วิ่งเร็ว (Speed) : ON"
+        SpeedToggleBtn.TextColor3 = Color3.fromRGB(0, 200, 255)
+    else
+        SpeedToggleBtn.Text = "วิ่งเร็ว (Speed) : OFF"
+        SpeedToggleBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = 16
+        end
+    end
+end)
+
+local function updateSpeedSlider(input)
+    local pos = math.clamp((input.Position.X - SpeedSliderBG.AbsolutePosition.X) / SpeedSliderBG.AbsoluteSize.X, 0, 1)
+    local val = math.floor(1 + (pos * 99))
+    States.SpeedValue = val
+    SpeedSliderFill.Size = UDim2.new(pos, 0, 1, 0)
+    SpeedValueLabel.Text = "ความเร็ว: " .. tostring(val)
+    if States.Speed and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = val
+    end
+end
+
+local draggingSpeed = false
+SpeedSliderBG.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingSpeed = true
+        updateSpeedSlider(input)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingSpeed = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if draggingSpeed and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        updateSpeedSlider(input)
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if States.Speed and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = States.SpeedValue
+    end
+end)
+
+-- Function 2: Fly + Separate Stop Button
+local FlySeparateBtn = Instance.new("TextButton")
+FlySeparateBtn.Name = "FlyStopButton"
+FlySeparateBtn.Text = "⏹️ หยุดบิน (Stop Fly)"
+FlySeparateBtn.Size = UDim2.new(0, 140, 0, 45)
+FlySeparateBtn.Position = UDim2.new(0.05, 0, 0.82, 0)
+FlySeparateBtn.Font = Enum.Font.SourceSansBold
+FlySeparateBtn.TextSize = 15
+FlySeparateBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+FlySeparateBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+FlySeparateBtn.Visible = false
+FlySeparateBtn.Active = true
+FlySeparateBtn.Draggable = true
+FlySeparateBtn.Parent = ScreenGui
+
+local FlySepCorner = Instance.new("UICorner")
+FlySepCorner.CornerRadius = UDim.new(0, 8)
+FlySepCorner.Parent = FlySeparateBtn
+
+local function stopFly()
+    States.Fly = false
+    FlySeparateBtn.Visible = false
+    if FlyBodyVel then FlyBodyVel:Destroy() FlyBodyVel = nil end
+    if FlyBodyGyro then FlyBodyGyro:Destroy() FlyBodyGyro = nil end
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.PlatformStand = false
+    end
+end
+
+FlySeparateBtn.MouseButton1Click:Connect(function()
+    playSound(soundClick)
+    stopFly()
+end)
+
+createToggleButton("2. บินได้ (Fly)", 2, function(state)
+    States.Fly = state
+    FlySeparateBtn.Visible = state
+    if state then
+        local char = LocalPlayer.Character
+        if not char then return end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChild("Humanoid")
+        if not hrp or not hum then return end
+
+        FlyBodyVel = Instance.new("BodyVelocity")
+        FlyBodyVel.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+        FlyBodyVel.Velocity = Vector3.zero
+        FlyBodyVel.Parent = hrp
+
+        FlyBodyGyro = Instance.new("BodyGyro")
+        FlyBodyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+        FlyBodyGyro.CFrame = hrp.CFrame
+        FlyBodyGyro.Parent = hrp
+
+        hum.PlatformStand = true
+
+        task.spawn(function()
+            while States.Fly and char and hrp do
+                local camCF = workspace.CurrentCamera.CFrame
+                local moveDir = Vector3.zero
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camCF.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCF.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCF.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCF.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0, 1, 0) end
+
+                FlyBodyVel.Velocity = moveDir * FlySpeed
+                FlyBodyGyro.CFrame = camCF
+                task.wait()
+            end
+            stopFly()
+        end)
+    else
+        stopFly()
+    end
+end)
+
+-- Function 3: Infinite Jump
+createToggleButton("3. กระโดดไม่จำกัด (Infinite Jump)", 3, function(state)
+    States.InfiniteJump = state
+end)
+
+UserInputService.JumpRequest:Connect(function()
+    if States.InfiniteJump and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+-- Function 4: Noclip
+createToggleButton("4. วิ่งทะลุ (Noclip)", 4, function(state)
+    States.Noclip = state
+    if state then
+        NoclipConnection = RunService.Stepped:Connect(function()
+            if States.Noclip and LocalPlayer.Character then
+                for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    else
+        if NoclipConnection then NoclipConnection:Disconnect() end
+    end
+end)
+
+-- Function 5: GodMode
+createToggleButton("5. อมตะ (God Mode)", 5, function(state)
+    States.GodMode = state
+    if state and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        local hum = LocalPlayer.Character.Humanoid
+        hum.MaxHealth = math.huge
+        hum.Health = math.huge
+    end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    char:WaitForChild("Humanoid").HealthChanged:Connect(function()
+        if States.GodMode and char:FindFirstChild("Humanoid") then
+            char.Humanoid.Health = char.Humanoid.MaxHealth
+        end
+    end)
+end)
+
+-- Function 6: TimeStop (Client Side)
+createToggleButton("6. หยุดเวลา (Client TimeStop)", 6, function(state)
+    States.TimeStop = state
+    if state then
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("BasePart") and not obj:IsDescendantOf(LocalPlayer.Character) then
+                obj.Anchored = true
+            end
+        end
+    else
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("BasePart") and not obj:IsDescendantOf(LocalPlayer.Character) then
+                obj.Anchored = false
+            end
+        end
+    end
+end)
+
+-- ========================================================
+-- 4. Open/Close Toggle Sound & Control
+-- ========================================================
+local menuVisible = true
+CloseBtn.MouseButton1Click:Connect(function()
+    playSound(soundToggle)
+    menuVisible = not menuVisible
+    MainFrame.Visible = menuVisible
+end)
+
+-- Hotkey 'K' to Toggle Menu visibility
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if not gpe and input.KeyCode == Enum.KeyCode.K then
+        playSound(soundToggle)
+        menuVisible = not menuVisible
+        MainFrame.Visible = menuVisible
+    end
+end)
